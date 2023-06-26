@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# Set the required variables
+github_username="maria-ah-ghanem"
+repository_name="maria_202010261"
+local_directory="/srv/samba/maria_202010261"
+log_file="/var/log/backup.log"
+notification_email="ma.ahgxa@gmail.com"
+
+# Function to log messages with timestamp
+log_message() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$log_file"
+}
+
+# Function to send email notification
+send_notification() {
+    subject="Backup Job Notification"
+    message="The backup job has been completed successfully."
+    echo "$message" | mail -s "$subject" "$notification_email"
+}
+
+# Function to perform backup
+perform_backup() {
+    rsync -av --delete "/srv/samba/maria_202010261/" "https://github.com/maria-ah-ghanem/maria_202010261"
+    
+    # Check the exit status of rsync command
+    if [ $? -eq 0 ]; then
+        log_message "Backup completed successfully."
+        send_notification
+    else
+        log_message "Backup failed. Please check the error logs."
+    fi
+}
+
+# Function to monitor changes in the local shared repository
+monitor_changes() {
+    inotifywait -m -r -e create,modify,delete "$local_directory" |
+    while read -r directory event file; do
+        log_message "Action: $event on $directory$file"
+        perform_backup
+    done
+}
+
+# Main script execution
+case "$1" in
+    start)
+        log_message "Backup job started."
+        perform_backup
+        monitor_changes &
+        ;;
+    stop)
+        log_message "Backup job stopped."
+        # Add logic to stop the backup job if necessary
+        ;;
+    resume)
+        log_message "Backup job resumed."
+        perform_backup
+        monitor_changes &
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|resume}"
+        exit 1
+        ;;
+esac
+
+exit 0
